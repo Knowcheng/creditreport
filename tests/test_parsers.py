@@ -64,3 +64,33 @@ def test_personal_simple_parser_returns_correct_type():
     parser = PersonalSimpleParser(text=sample_text, tables=[], file_path="test.pdf")
     result = parser.parse()
     assert result.report_type == "personal_simple"
+
+
+def test_factory_returns_enterprise_parser_for_enterprise_text():
+    from backend.parsers.factory import ReportParserFactory
+    parser = ReportParserFactory.get_parser(
+        text="企业信用报告\nNO.123", tables=[], file_path="test.pdf"
+    )
+    from backend.parsers.enterprise import EnterpriseParser
+    assert isinstance(parser, EnterpriseParser)
+
+def test_factory_returns_personal_detail_for_detail_text():
+    from backend.parsers.factory import ReportParserFactory
+    parser = ReportParserFactory.get_parser(
+        text="个人信用报告\n身份信息", tables=[], file_path="test.pdf"
+    )
+    from backend.parsers.personal_detail import PersonalDetailParser
+    assert isinstance(parser, PersonalDetailParser)
+
+def test_factory_returns_personal_simple_for_simple_text():
+    from backend.parsers.factory import ReportParserFactory
+    parser = ReportParserFactory.get_parser(
+        text="个人信用报告\n信贷记录", tables=[], file_path="test.pdf"
+    )
+    from backend.parsers.personal_simple import PersonalSimpleParser
+    assert isinstance(parser, PersonalSimpleParser)
+
+def test_factory_raises_for_unknown_text():
+    from backend.parsers.factory import ReportParserFactory
+    with pytest.raises(ValueError, match="无法识别"):
+        ReportParserFactory.get_parser(text="无关内容", tables=[], file_path="test.pdf")
