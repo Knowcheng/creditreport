@@ -9,7 +9,7 @@ class Settings:
     MODE: str = os.getenv("MODE", "local")
     JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-change-in-prod")
     JWT_EXPIRE_HOURS: int = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
-    OCR_URL: str = os.getenv("OCR_URL", "http://localhost:8080/ocr")
+    OCR_URL: str = os.getenv("OCR_URL", "http://192.168.0.104:8080/chat/completions")
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "./uploads")
 
     def __init__(self):

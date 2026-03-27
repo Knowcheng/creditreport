@@ -11,7 +11,7 @@ class EnterpriseParser(BaseParser):
 
     REPORT_PATTERNS = {
         "report_number": r"NO\.(\d+)",
-        "company_name": r"企业名称[：:](.+?)\s",
+        "company_name": r"企业名称[：:]\s*([^<\n\s]+)",
         "credit_num": r"中征码[：:](.+?)\s",
         "credit_code": r"统一社会信用代码[：:]\s*([0-9A-Z]{18})",
         "query_org": r"查询机构[：:](.+?)\s",

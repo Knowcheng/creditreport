@@ -17,8 +17,12 @@ class ReportParserFactory:
         )
         if is_enterprise:
             return EnterpriseParser(text=text, tables=tables, file_path=file_path)
-        # Personal: check full text for type keywords (OCR output may be long before keywords appear)
-        is_personal = "个人信用报告" in search_text or "个人版" in search_text
+        # Personal: check for header keyword or OCR-specific field that appears even without page header
+        is_personal = (
+            "个人信用报告" in search_text
+            or "个人版" in search_text
+            or "被查询者姓名" in search_text  # OCR pages may omit header but keep this field
+        )
         if is_personal:
             if "身份信息" in text:
                 return PersonalDetailParser(text=text, tables=tables, file_path=file_path)
