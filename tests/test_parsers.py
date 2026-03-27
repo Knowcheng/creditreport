@@ -39,3 +39,28 @@ def test_enterprise_parser_extracts_report_info():
     assert result.report_number == "20240101120000001"
     assert result.subject_name == "测试科技有限公司"
     assert result.report_date == "2024-01-01T12:00:00"
+
+
+def test_personal_detail_parser_returns_correct_type():
+    sample_tables = [
+        [
+            ["报告编号：20240201000001", "", "", "报告时间：2024-02-01"],
+            ["被查询者姓名", "证件类型", "证件号码"],
+            ["张三", "身份证", "110101199001011234"],
+        ]
+    ]
+    from backend.parsers.personal_detail import PersonalDetailParser
+    parser = PersonalDetailParser(text="个人信用报告 身份信息", tables=sample_tables, file_path="test.pdf")
+    result = parser.parse()
+    assert result.report_type == "personal_detail"
+
+def test_personal_simple_parser_returns_correct_type():
+    sample_text = (
+        "个人信用报告\n"
+        "报告编号：20240301 报告时间：2024-03-01\n"
+        "姓名：李四 证件号码：110101199001012345 已婚\n"
+    )
+    from backend.parsers.personal_simple import PersonalSimpleParser
+    parser = PersonalSimpleParser(text=sample_text, tables=[], file_path="test.pdf")
+    result = parser.parse()
+    assert result.report_type == "personal_simple"
