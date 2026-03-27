@@ -24,10 +24,9 @@ def override_get_db():
     finally:
         db.close()
 
-app.dependency_overrides[get_db] = override_get_db
-
 @pytest.fixture(autouse=True)
 def setup_db():
+    app.dependency_overrides[get_db] = override_get_db
     Base.metadata.create_all(engine)
     db = TestSession()
     user = User(id=1, username="testuser", password_hash=hash_password("pass"), role="user")
@@ -36,6 +35,7 @@ def setup_db():
     db.close()
     yield
     Base.metadata.drop_all(engine)
+    app.dependency_overrides.pop(get_db, None)
 
 client = TestClient(app)
 

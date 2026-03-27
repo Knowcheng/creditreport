@@ -3,9 +3,13 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 
 def test_all_tables_created():
+    import importlib
+    import backend.core.database
+    importlib.reload(backend.core.database)
+    import backend.models.db
+    importlib.reload(backend.models.db)
     engine = create_engine("sqlite:///:memory:")
     from backend.core.database import Base
-    import backend.models.db  # 注册所有模型
     Base.metadata.create_all(engine)
     inspector = inspect(engine)
     tables = inspector.get_table_names()
@@ -17,9 +21,13 @@ def test_all_tables_created():
     assert "query_records" in tables
 
 def test_user_model_fields():
+    import importlib
+    import backend.core.database
+    importlib.reload(backend.core.database)
+    import backend.models.db
+    importlib.reload(backend.models.db)
     engine = create_engine("sqlite:///:memory:")
     from backend.core.database import Base
-    import backend.models.db
     Base.metadata.create_all(engine)
     inspector = inspect(engine)
     cols = [c["name"] for c in inspector.get_columns("users")]
