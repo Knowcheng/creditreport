@@ -83,39 +83,50 @@ class PersonalDetailParser(BaseParser):
     def _extract_credit_accounts_from_ocr(self, text: str) -> list:
         accounts = []
         # Find credit detail section
-        section_start = text.find('三信贷交易信息明细')
-        if section_start == -1:
-            section_start = text.find('信贷交易信息明细')
+        section_start = -1
+        for marker in ['三信贷交易信息明细', '信贷交易信息明细']:
+            idx = text.find(marker)
+            if idx != -1:
+                section_start = idx
+                break
         if section_start == -1:
             return accounts
 
         section_text = text[section_start:]
-        # Find all HTML tables in this section
         table_pattern = re.compile(r'<table[^>]*>(.*?)</table>', re.DOTALL)
+        row_pattern = re.compile(r'<tr[^>]*>(.*?)</tr>', re.DOTALL)
+        cell_pattern = re.compile(r'<td[^>]*>(.*?)</td>', re.DOTALL)
 
         for table_match in table_pattern.finditer(section_text):
             table_html = table_match.group(1)
-            # Extract all td contents
-            cells = re.findall(r'<td[^>]*>(.*?)</td>', table_html, re.DOTALL)
-            cells = [re.sub(r'<[^>]+>', '', c).strip() for c in cells]  # strip HTML tags
-
-            if len(cells) >= 4 and '管理机构' in cells:
-                # This is a header row table - skip
+            rows = row_pattern.findall(table_html)
+            if not rows:
                 continue
 
-            # If this looks like account data (has institution name, amount, etc.)
-            if len(cells) >= 4 and cells and cells[0] and not any(
-                h in cells[0] for h in ['管理机构', '账户标识', '账户类型']
-            ):
-                account = {
-                    "account_type": "贷款",
-                    "institution": cells[0] if cells else None,
-                    "amount": None,
-                    "balance": None,
-                    "status": "正常",
-                    "data_json": {"cells": cells[:8]},
-                }
-                accounts.append(account)
+            # Parse each row into cleaned cells
+            parsed_rows = []
+            for row_html in rows:
+                cells = [re.sub(r'<[^>]+>', '', c).strip() for c in cell_pattern.findall(row_html)]
+                parsed_rows.append(cells)
+
+            # Find header row with '管理机构' and extract the data row that follows
+            for i, row in enumerate(parsed_rows):
+                if row and row[0] == '管理机构' and i + 1 < len(parsed_rows):
+                    data_row = parsed_rows[i + 1]
+                    if not data_row or not data_row[0]:
+                        continue
+                    institution = data_row[0]
+                    # Amount is typically in the 5th column (index 4)
+                    amount = data_row[4] if len(data_row) > 4 else None
+                    account_type = data_row[5] if len(data_row) > 5 else "贷款"
+                    accounts.append({
+                        "account_type": account_type or "贷款",
+                        "institution": institution,
+                        "amount": amount,
+                        "balance": None,
+                        "status": "正常",
+                        "data_json": {"row": data_row},
+                    })
 
         return accounts
 
