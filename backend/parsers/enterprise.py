@@ -51,6 +51,21 @@ class EnterpriseParser(BaseParser):
         for key, pattern in self.REPORT_PATTERNS.items():
             match = re.search(pattern, self.text)
             info[key] = match.group(1).strip() if match else None
+
+        # If report_number not found via NO. pattern, try 中征码 from tables
+        if not info.get("report_number") and self.tables and len(self.tables[0]) >= 1:
+            for row in self.tables[0]:
+                if len(row) >= 2 and row[0] and '中征码' in str(row[0]):
+                    info["report_number"] = str(row[1]).strip() if row[1] else None
+                    break
+
+        # If company_name not found via text regex, try tables
+        if not info.get("company_name") and self.tables and len(self.tables[0]) >= 1:
+            for row in self.tables[0]:
+                if len(row) >= 2 and row[0] and '企业名称' in str(row[0]):
+                    info["company_name"] = str(row[1]).strip() if row[1] else None
+                    break
+
         return info
 
     def _extract_com_base(self, report_info: dict) -> Optional[dict]:

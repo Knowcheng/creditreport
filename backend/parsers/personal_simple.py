@@ -70,7 +70,152 @@ class PersonalSimpleParser(BaseParser):
             return None
 
     def _extract_credit_summary(self) -> list:
-        return []
+        accounts = []
+
+        # Clean page markers and join wrapped lines
+        cleaned = re.sub(r'第 \d+ 页，共 \d+ 页', '', self.text)
+
+        # Find the credit cards/loans section: from first card section marker to query records
+        query_marker = '查询记录'
+        query_idx = cleaned.find(query_marker)
+        credit_section = cleaned[:query_idx] if query_idx >= 0 else cleaned
+
+        # Join wrapped lines: lines that don't start a new numbered entry get appended
+        raw_lines = credit_section.splitlines()
+        joined_lines = []
+        for line in raw_lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            # New entry starts with a digit followed by . or space+digit
+            if re.match(r'^\d+[.\s]', stripped) or joined_lines == []:
+                joined_lines.append(stripped)
+            else:
+                # Continuation line - append to previous
+                if joined_lines:
+                    joined_lines[-1] += stripped
+                else:
+                    joined_lines.append(stripped)
+
+        card_patterns = {
+            '发卡日期': re.compile(r'(\d{4}年\d{2}月\d{2}日)'),
+            '金融机构': re.compile(r'\d{4}年\d{2}月\d{2}日([\u4e00-\u9fa5]+(?:股份有限公司|有限责任公司|有限公司)[\u4e00-\u9fa5]*)发放的贷记卡'),
+            '货币种类': re.compile(r'（([\u4e00-\u9fa5]+账户)'),
+            '卡号尾号': re.compile(r'卡片尾号：(\d{4})'),
+            '授信额度': re.compile(r'信用额度([\d,]+)'),
+            '已用额度': re.compile(r'已使用额度([\d,]+)'),
+            '余额': re.compile(r'余额(?:为)?([\d,]+)'),
+        }
+
+        loan_patterns = {
+            '借款日期': re.compile(r'(\d{4}年\d{2}月\d{2}日)'),
+            '金融机构': re.compile(r'\d{4}年\d{2}月\d{2}日([\u4e00-\u9fa5]+(?:股份有限公司|有限责任公司|有限公司|股份公司)[\u4e00-\u9fa5]*)(?:发放|为)'),
+            '借款金额': re.compile(r'([\d,]+)元（人民币）'),
+            '余额': re.compile(r'余额(?:为)?([\d,]+)'),
+            '借款种类': re.compile(r'发放的[\d,]+元（人民币）([\u4e00-\u9fa5]+贷款)'),
+        }
+
+        for line in joined_lines:
+            if '发放的贷记卡' in line:
+                data = {}
+                for field, pat in card_patterns.items():
+                    m = pat.search(line)
+                    data[field] = m.group(1) if m else None
+
+                if '销户' in line:
+                    status = '销户'
+                elif '呆账' in line:
+                    status = '呆账'
+                elif '当前有逾期' in line:
+                    status = '逾期'
+                else:
+                    status = '正常'
+
+                institution = data.get('金融机构')
+                amount = data.get('授信额度')
+                balance = data.get('余额') or data.get('已用额度')
+
+                accounts.append({
+                    "account_type": "贷记卡",
+                    "institution": institution,
+                    "amount": amount,
+                    "balance": balance,
+                    "status": status,
+                    "data_json": data,
+                })
+
+            elif '元（人民币）' in line and ('贷款' in line or '授信' in line):
+                data = {}
+                for field, pat in loan_patterns.items():
+                    m = pat.search(line)
+                    data[field] = m.group(1) if m else None
+
+                if '销户' in line:
+                    status = '销户'
+                elif '呆账' in line:
+                    status = '呆账'
+                elif '当前有逾期' in line:
+                    status = '逾期'
+                else:
+                    status = '正常'
+
+                institution = data.get('金融机构')
+                amount = data.get('借款金额')
+                balance = data.get('余额')
+
+                accounts.append({
+                    "account_type": "贷款",
+                    "institution": institution,
+                    "amount": amount,
+                    "balance": balance,
+                    "status": status,
+                    "data_json": data,
+                })
+
+        return accounts
 
     def _extract_query_summary(self) -> list:
-        return []
+        records = []
+        query_marker = '查询记录'
+        idx = self.text.find(query_marker)
+        if idx < 0:
+            return records
+
+        query_section = self.text[idx:]
+
+        header_marker = '编号 查询日期 查询机构 查询原因'
+        header_idx = query_section.find(header_marker)
+        if header_idx < 0:
+            return records
+
+        after_header = query_section[header_idx + len(header_marker):]
+
+        # Clean page markers
+        after_header = re.sub(r'第 \d+ 页，共 \d+ 页', '', after_header)
+
+        # Join wrapped lines for query records
+        raw_lines = after_header.splitlines()
+        joined_lines = []
+        for line in raw_lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if re.match(r'^\d+\s', stripped):
+                joined_lines.append(stripped)
+            else:
+                if joined_lines:
+                    joined_lines[-1] += stripped
+
+        pattern = re.compile(
+            r'(\d+)\s+(\d{4}年\d{2}月\d{2}日)\s+([\u4e00-\u9fa5\w（）、]+)\s+([\u4e00-\u9fa5]+)'
+        )
+        for line in joined_lines:
+            m = pattern.search(line)
+            if m:
+                records.append({
+                    "query_date": m.group(2),
+                    "query_org": m.group(3),
+                    "query_reason": m.group(4),
+                })
+
+        return records
