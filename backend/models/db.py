@@ -35,13 +35,17 @@ class Report(Base):
 
     user: Mapped["User"] = relationship("User", back_populates="reports")
     enterprise_report: Mapped[Optional["EnterpriseReport"]] = relationship(
-        "EnterpriseReport", back_populates="report", uselist=False
+        "EnterpriseReport", back_populates="report", uselist=False, cascade="all, delete-orphan"
     )
     personal_report: Mapped[Optional["PersonalReport"]] = relationship(
-        "PersonalReport", back_populates="report", uselist=False
+        "PersonalReport", back_populates="report", uselist=False, cascade="all, delete-orphan"
     )
-    credit_accounts: Mapped[list["CreditAccount"]] = relationship("CreditAccount", back_populates="report")
-    query_records: Mapped[list["QueryRecord"]] = relationship("QueryRecord", back_populates="report")
+    credit_accounts: Mapped[list["CreditAccount"]] = relationship(
+        "CreditAccount", back_populates="report", cascade="all, delete-orphan"
+    )
+    query_records: Mapped[list["QueryRecord"]] = relationship(
+        "QueryRecord", back_populates="report", cascade="all, delete-orphan"
+    )
 
 
 class EnterpriseReport(Base):

@@ -1,9 +1,10 @@
 # frontend/api_client.py
+import os
 import httpx
 import streamlit as st
 from typing import Optional
 
-API_BASE = "http://localhost:8000"
+API_BASE = os.getenv("API_BASE", "http://localhost:8000")
 
 
 def get_headers() -> dict:

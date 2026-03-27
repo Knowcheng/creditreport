@@ -1,5 +1,5 @@
 import os
-import shutil
+import pathlib
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
@@ -11,20 +11,43 @@ from backend.services.report_service import ReportService
 
 router = APIRouter()
 
+ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+
 
 @router.post("/upload")
-def upload_report(
+async def upload_report(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Check allowed extensions
+    file_ext = pathlib.Path(file.filename).suffix.lower()
+    if file_ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="不支持的文件格式，仅支持 PDF、JPG、PNG")
+
+    # Read file bytes and check size
+    file_bytes = await file.read()
+    if len(file_bytes) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="文件过大，最大支持 50MB")
+
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{timestamp}_{file.filename}"
+
+    # Sanitize filename to prevent path traversal
+    safe_name = os.path.basename(file.filename)
+    if not safe_name:
+        safe_name = "upload"
+    filename = f"{timestamp}_{safe_name}"
     file_path = os.path.join(settings.UPLOAD_DIR, filename)
+    # Verify path stays within upload dir
+    upload_dir_abs = os.path.realpath(settings.UPLOAD_DIR)
+    file_path_abs = os.path.realpath(file_path)
+    if not file_path_abs.startswith(upload_dir_abs + os.sep) and file_path_abs != upload_dir_abs:
+        raise HTTPException(status_code=400, detail="无效的文件名")
 
     with open(file_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+        f.write(file_bytes)
 
     service = ReportService(db=db)
     try:
@@ -113,5 +136,12 @@ def delete_report(
     ).first()
     if not report:
         raise HTTPException(status_code=404, detail="报告不存在")
+    file_path = report.file_path
     db.delete(report)
     db.commit()
+    # Clean up uploaded file
+    if file_path and os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass  # Don't fail the delete if file cleanup fails
