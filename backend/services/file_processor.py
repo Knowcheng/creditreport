@@ -63,13 +63,15 @@ class FileProcessor:
 
     def _extract_from_scanned_pdf(self, file_path: str) -> Tuple[str, list]:
         try:
-            from pdf2image import convert_from_path
             import io
-            images = convert_from_path(file_path)
+            import pypdfium2 as pdfium
+            pdf = pdfium.PdfDocument(file_path)
             texts = []
-            for img in images:
+            for page in pdf:
+                bitmap = page.render(scale=2.0)
+                img = bitmap.to_pil()
                 buf = io.BytesIO()
-                img.save(buf, format="PNG")
+                img.save(buf, format="JPEG", quality=90)
                 text = self.ocr.recognize_image(buf.getvalue())
                 texts.append(text)
             return "\n".join(texts), []

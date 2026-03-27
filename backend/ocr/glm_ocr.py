@@ -13,14 +13,19 @@ class GlmOcr:
 
     def recognize_image(self, image_bytes: bytes) -> str:
         image_b64 = base64.b64encode(image_bytes).decode()
-        response = httpx.post(
-            self.endpoint,
-            json={"image": image_b64},
-            timeout=60.0,
-        )
+        # GLM-OCR server accepts images as data URIs
+        data_uri = f"data:image/jpeg;base64,{image_b64}"
+        # Use trust_env=False to bypass system proxies for local connections
+        with httpx.Client(trust_env=False) as client:
+            response = client.post(
+                self.endpoint,
+                json={"images": [data_uri]},
+                headers={"Content-Type": "application/json"},
+                timeout=120.0,
+            )
         if response.status_code != 200:
             raise RuntimeError(f"OCR 服务返回错误: {response.status_code} {response.text}")
-        return response.json().get("text", "")
+        return response.json().get("markdown_result", "")
 
     def recognize_file(self, file_path: str) -> str:
         with open(file_path, "rb") as f:
