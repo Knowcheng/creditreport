@@ -11,6 +11,10 @@ class PersonalSimpleParser(BaseParser):
     """个人征信简版解析器（重构自旧代码 CR_PSParser）"""
 
     def parse(self) -> ReportResult:
+        # Detect OCR mode: no tables and HTML table tags present in text
+        if not self.tables and '<table' in self.text:
+            return self._parse_ocr()
+
         base_info = self._extract_base_info()
         credit_accounts = self._extract_credit_summary()
         query_records = self._extract_query_summary()
@@ -27,6 +31,50 @@ class PersonalSimpleParser(BaseParser):
             report_type="personal_simple",
             report_number=report_number,
             subject_name=name,
+            report_date=report_date,
+            raw_data={"base_info": base_info},
+            credit_accounts=credit_accounts,
+            query_records=query_records,
+        )
+
+    def _parse_ocr(self) -> ReportResult:
+        text = self.text
+
+        # Extract report_number
+        m = re.search(r'报告编号[：:]\s*(\d+)', text)
+        report_number = m.group(1) if m else None
+
+        # Extract report_date
+        m = re.search(r'报告时间[：:]\s*([\d]{4}[\./][\d./ :]+)', text)
+        report_date = m.group(1).strip() if m else None
+
+        # Extract subject_name from HTML table: row after header with 被查询者姓名
+        m = re.search(r'被查询者姓名.*?</tr>\s*<tr[^>]*>\s*<td[^>]*>(.*?)</td>', text, re.DOTALL)
+        subject_name = m.group(1).strip() if m else None
+
+        # Extract id_number (3rd td in same data row)
+        id_match = re.search(
+            r'被查询者姓名.*?</tr>\s*<tr[^>]*>\s*<td[^>]*>.*?</td>\s*<td[^>]*>.*?</td>\s*<td[^>]*>([\d]{15,18}[xX]?)</td>',
+            text, re.DOTALL
+        )
+        id_number = id_match.group(1) if id_match else None
+
+        # For OCR simple reports the credit/query text may still be plain text
+        # Try the existing plain-text extractors which work on self.text
+        credit_accounts = self._extract_credit_summary()
+        query_records = self._extract_query_summary()
+
+        base_info = {
+            "报告编号": report_number,
+            "报告日期": report_date,
+            "姓名": subject_name,
+            "证件号码": id_number,
+        }
+
+        return ReportResult(
+            report_type="personal_simple",
+            report_number=report_number,
+            subject_name=subject_name,
             report_date=report_date,
             raw_data={"base_info": base_info},
             credit_accounts=credit_accounts,
